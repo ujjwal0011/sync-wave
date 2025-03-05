@@ -18,6 +18,31 @@ const messageSchema = new mongoose.Schema(
     images: {
       type: String,
     },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    originalText: {
+      type: String,
+      default: null,
+    },
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedForSender: {
+      type: Boolean,
+      default: false,
+    },
+    deletedForReceiver: {
+      type: Boolean,
+      default: false,
+    },
+    deletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
+    
   },
   { timestamps: true }
 );

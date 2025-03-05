@@ -1,13 +1,31 @@
 import React, { useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
+import { useAuthStore } from "../store/useAuthStore";
 import { X, Image, Send } from "lucide-react";
 import toast from "react-hot-toast";
 
 function MessageInput() {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState("");
-  const fileInputREF = useRef(null);
-  const { sendMessages } = useChatStore();
+  const fileInputRef = useRef(null);
+  const { sendMessages, selectedUser } = useChatStore();
+  const { authUser, socket } = useAuthStore();
+
+  let typingTimeout;
+
+  const handleTyping = () => {
+    if (!socket || !socket.connected || !selectedUser) return;
+
+    socket.emit("typing", {
+      senderId: authUser._id,
+      receiverId: selectedUser._id,
+    });
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      socket.emit("stopTyping", { receiverId: selectedUser._id });
+    }, 2000);
+  };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -19,31 +37,29 @@ function MessageInput() {
     reader.onload = () => {
       setImagePreview(reader.result);
     };
-
     reader.readAsDataURL(file);
   };
 
   const removeImage = () => {
-    setImagePreview(null);
-    if (fileInputREF.current) fileInputREF.current.value = "";
+    setImagePreview("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!text.trim() && !imagePreview) return;
-    try {
-      await sendMessages({
-        text: text.trim(),
-        image: imagePreview,
-      });
 
+    try {
+      await sendMessages({ text: text.trim(), image: imagePreview });
       setText("");
-      setImagePreview(null);
-      if (fileInputREF.current) fileInputREF.current.value = "";
+      setImagePreview("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      socket.emit("stopTyping", { receiverId: selectedUser._id });
     } catch (error) {
-      console.log("Failed to send message: " + error);
+      console.error("Failed to send message:", error);
     }
   };
+
   return (
     <div className="p-4 w-full">
       {imagePreview && (
@@ -66,31 +82,30 @@ function MessageInput() {
       )}
 
       <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-        <div className="flex-1 flex gap-2">
-          <input
-            type="text"
-            className="w-full input input-bordered rounded-lg input-sm sm:input-md"
-            placeholder="Type a message..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            ref={fileInputREF}
-            onChange={handleImageChange}
-          />
-          <button
-            type="button"
-            className={`hidden sm:flex btn btn-circle ${
-              imagePreview ? "text-emerald-500" : "text-zinc-400"
-            }`}
-            onClick={() => fileInputREF.current?.click()}
-          >
-            <Image size={20} />
-          </button>
-        </div>
+        <input
+          type="text"
+          placeholder="Type a message..."
+          className="w-full input input-bordered rounded-lg input-sm sm:input-md"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            handleTyping();
+          }}
+        />
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleImageChange}
+        />
+        <button
+          type="button"
+          className={`hidden sm:flex btn btn-circle ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Image size={20} />
+        </button>
         <button
           type="submit"
           className="btn btn-sm btn-circle"
